@@ -1,1 +1,212 @@
+# main.py
+# Honest Harry Car Sales - Main Application
+# Author: FERAS ZEN
+# Date: NON 17, 2025
+
+import datetime
+
+# Import all functions from our custom formatting library
+# The file FormatValues.py must be in the same directory.
+from FormatValues import *
+
+# Business constants & rules 
+MAX_SELL_PRICE = 50000.00
+LIC_FEE_THRESHOLD = 15000.00
+LIC_FEE_LOW = 75.00
+LIC_FEE_HIGH = 165.00
+LUX_THRESHOLD = 20000.00
+LUX_RATE = 0.016
+TRANS_RATE = 0.01
+HST_RATE = 0.15
+FIN_RATE_PER_YEAR = 39.99
+
+# Business logic functions 
+
+def calc_license_fee(price):
+    # Calculates the license fee based on the selling price.
+    return LIC_FEE_LOW if price <= LIC_FEE_THRESHOLD else LIC_FEE_HIGH
+
+def calc_transfer_fee(price):
+    # Calculates the transfer fee, including luxury tax if applicable.
+    fee = price * TRANS_RATE
+    if price > LUX_THRESHOLD:
+        fee += price * LUX_RATE
+    return fee
+
+def calc_first_payment_date(inv_date):
+    # Calculates the first payment date based on the invoice date.
+    day = inv_date.day
+    month = inv_date.month
+    year = inv_date.year
+    
+    month += 1 # Move to the next month
+    if day >= 25:
+        month += 1 # Add an extra month if on or after the 25th
+    
+    if month > 12:
+        year += (month - 1) // 12
+        month = (month - 1) % 12 + 1
+        
+    return datetime.date(year, month, 1)
+
+# Input validation helpers 
+
+def input_required(prompt):
+    
+    # Ensures that the user provides a non-empty input.
+    while True:
+        v = input(prompt).strip()
+        if v:
+            return v
+        print("This field is required. Please try again.")
+
+def input_first_name(prompt):
+    
+    # Gets the first name, handling the 'END' keyword.
+    while True:
+        v = input(prompt).strip()
+        if not v:
+            print("First name is required. Please try again.")
+            continue
+        if v.upper() == "END":
+            return "END"
+        return v.title()
+
+def input_phone(prompt):
+    
+    # Gets and validates a 10-digit phone number.
+    while True:
+        v = input(prompt).strip()
+        digits = clean_digits(v) # Using function from FormatValues.py
+        if len(digits) == 10:
+            return digits
+        print("Invalid format. Please enter a 10-digit phone number.")
+
+def input_plate(prompt):
+    
+    # Gets and validates a 6-character plate number in XXX999 format.
+    while True:
+        v = input(prompt).strip().upper()
+        if len(v) != 6:
+            print("Plate number must be 6 characters. Please try again.")
+            continue
+        
+        if not (v[0:3].isalpha() and v[3:6].isdigit()):
+            print("Invalid format. Plate number must be 3 letters followed by 3 numbers (e.g., ABC123).")
+            continue
+            
+        return v
+
+def input_price(prompt, max_value=None):
+    
+    # Gets and validates a numeric price.
+    while True:
+        v = input(prompt).strip()
+        try:
+            num = float(v)
+        except ValueError:
+            print("Invalid number. Please enter a numeric amount.")
+            continue
+        if num < 0:
+            print("Value cannot be negative. Please try again.")
+            continue
+        if max_value is not None and num > max_value:
+            print(f"Value cannot exceed {FDollar2(max_value)}. Please try again.")
+            continue
+        return num
+
+# Printing / Formatting receipt
+
+def print_receipt(first, last, phone_digits, plate, make, model, year, sell_price, trade_amount, salesperson):
+    """Calculates all values and prints the final formatted receipt."""
+    inv_date = datetime.date.today()
+
+    # All formatting functions are called directly because they were imported
+    receipt_no = make_receipt_id(first, last, plate, phone_digits)
+
+    # Calculations
+    price_after = sell_price - trade_amount
+    license_fee = calc_license_fee(sell_price)
+    transfer_fee = calc_transfer_fee(sell_price)
+    subtotal = price_after + license_fee + transfer_fee
+    hst = subtotal * HST_RATE
+    total = subtotal + hst
+    first_payment = calc_first_payment_date(inv_date)
+
+    # Print receipt using formatting functions
+    
+    cust_line = f"{first[0].upper()}. {last}"
+    phone_fmt = fmt_phone(phone_digits)
+    car_details = f"{year} {make} {model}"
+    
+    # Header 
+    print()
+    print(f"Honest Harry Car Sales             Invoice Date:          {FDateM(inv_date):>15}")
+    print(f"Used Car Sale and Receipt          Receipt No:            {receipt_no:>15}")
+    print()
+    print(f"                                   Sale price:            {FDollar2(sell_price):>15}")
+    print(f"Sold to:                           Trade Allowance:       {FDollar2(trade_amount):>15}")
+    print(f"                                   --------------------------------------")
+    # Customer 
+    cust_line = f"{first[0].upper()}. {last}"
+    phone_fmt = fmt_phone(phone_digits)
+    print(f"{cust_line:<35}Price after Trade:     {FDollar2(price_after):>15}")
+    print(f"{phone_fmt:<35}License Fee:           {FDollar2(license_fee):>15}")
+    print(f"{'':35}Transfer Fee:          {FDollar2(transfer_fee):>15}")
+    print(f"                                   --------------------------------------")
+    # Car & Totals
+    car_details = f"{year} {make} {model}"
+    print(f"{'Car Details:':<35}Subtotal:              {FDollar2(subtotal):>15}")
+    print(f"{car_details:<35}HST:                   {FDollar2(hst):>15}")
+    print(f"                                   --------------------------------------")
+    print(f"{'':35}Total sales price:     {FDollar2(total):>15}")
+    print('-'*73)
+    # Financing
+    print()
+    print(f"                          Financing     Total         Monthly")
+    print(f"  # Years    # Payments     Fee         Price         Payment")
+    print('-'*73)
+
+    for yrs in range(1, 5):
+        months = yrs * 12
+        fin_fee = yrs * FIN_RATE_PER_YEAR
+        total_price = total + fin_fee
+        monthly = total_price / months
+        print(f"{yrs:^11}{months:^14}{FDollar2(fin_fee):>9}    {FDollar2(total_price):>10}   {FDollar2(monthly):>10}")
+
+    print("   -------------------------------------------------------------")
+    print(f"   First payment date: {FDateS(first_payment)}")
+    print(f"   Sales Person: {salesperson}")
+    print("-------------------------------------------------------------------------")
+    print(f"{'Best used cars at the best prices!':^73}\n")
+
+# Main program loop 
+
+def main():
+    print("--- Honest Harry Car Sales ---")
+    while True:
+        first = input_first_name("Enter customer FIRST Name (type END to quit): ")
+        if first == "END":
+            print("Goodbye.")
+            break
+    
+        last = input_required("Enter customer LAST Name: ").title()
+        phone = input_phone("Enter Customer PHONE (10 digits): ")
+        plate = input_plate("Enter Plate Number (e.g., ABC123): ")
+        make = input_required("Enter Car MAKE: ").title()
+        model = input_required("Enter Car MODEL: ").title()
+        year = input_required("Enter Car YEAR: ")
+        sell_price = input_price(f"Enter Selling PRICE (MAX {FDollar2(MAX_SELL_PRICE)}): ", max_value=MAX_SELL_PRICE)
+        trade_amount = input_price("Enter TRADE-IN allowance: ", max_value=sell_price)
+        salesperson = input_required("Enter SALES PERSON Name: ").title()
+
+        print_receipt(first, last, phone, plate, make, model, year, sell_price, trade_amount, salesperson)
+        
+        cont = input("Press ENTER to record another sale or type END to quit: ").strip().upper()
+        if cont == "END":
+            print("Goodbye.")
+            break
+
+if __name__ == '__main__':
+    main()
 
